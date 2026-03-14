@@ -4,7 +4,7 @@
 # ============================================================
 set -uo pipefail
 
-PLUGIN="appdata-backup"
+PLUGIN="appdata-backup-and-restore"
 CONFIG_DIR="/boot/config/plugins/${PLUGIN}"
 CONFIG_FILE="${CONFIG_DIR}/config.cfg"
 LOG_DIR="/tmp/${PLUGIN}"

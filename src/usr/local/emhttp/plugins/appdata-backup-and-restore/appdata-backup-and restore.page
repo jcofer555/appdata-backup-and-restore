@@ -1,6 +1,6 @@
 Menu="Utilities"
-Title="AppData Backup"
-Icon="appdata-backup.png"
+Title="Appdata Backup & Restore"
+Icon="icon.png"
 Tag="archive"
 ---
 <?php
@@ -9,7 +9,7 @@ Tag="archive"
  * WebUI Page
  */
 
-$plugin      = 'appdata-backup';
+$plugin      = 'appdata-backup-and-restore';
 $configDir   = "/boot/config/plugins/$plugin";
 $configFile  = "$configDir/config.cfg";
 $logDir      = "/tmp/$plugin";
@@ -79,7 +79,7 @@ if (is_dir($cfg['BACKUP_DEST'])) {
 }
 ?>
 
-<link rel="stylesheet" href="/plugins/appdata-backup/css/appdata-backup.css">
+<link rel="stylesheet" href="/plugins/appdata-backup-and-restore/css/appdata-backup-and-restore.css">
 
 <div id="ab-wrap">
 
@@ -392,14 +392,14 @@ if (is_dir($cfg['BACKUP_DEST'])) {
                 <div class="ab-field-row">
                     <label class="ab-label">Pre-Backup Script</label>
                     <div class="ab-field-wrap">
-                        <input type="text" id="PRE_SCRIPT" class="ab-input" value="<?= htmlspecialchars($cfg['PRE_SCRIPT']) ?>" placeholder="/boot/config/plugins/appdata-backup/pre-backup.sh">
+                        <input type="text" id="PRE_SCRIPT" class="ab-input" value="<?= htmlspecialchars($cfg['PRE_SCRIPT']) ?>" placeholder="/boot/config/plugins/appdata-backup-and-restore/pre-backup.sh">
                         <div class="ab-field-hint">Script to run before backup starts</div>
                     </div>
                 </div>
                 <div class="ab-field-row">
                     <label class="ab-label">Post-Backup Script</label>
                     <div class="ab-field-wrap">
-                        <input type="text" id="POST_SCRIPT" class="ab-input" value="<?= htmlspecialchars($cfg['POST_SCRIPT']) ?>" placeholder="/boot/config/plugins/appdata-backup/post-backup.sh">
+                        <input type="text" id="POST_SCRIPT" class="ab-input" value="<?= htmlspecialchars($cfg['POST_SCRIPT']) ?>" placeholder="/boot/config/plugins/appdata-backup-and-restore/post-backup.sh">
                         <div class="ab-field-hint">Script to run after backup completes</div>
                     </div>
                 </div>
@@ -518,7 +518,7 @@ if (is_dir($cfg['BACKUP_DEST'])) {
 
 </div><!-- #ab-wrap -->
 
-<script src="/plugins/appdata-backup/js/appdata-backup.js"></script>
+<script src="/plugins/appdata-backup-and-restore/js/appdata-backup-and-restore.js"></script>
 <script>
 // Init with PHP values
 var AB_CONFIG = {

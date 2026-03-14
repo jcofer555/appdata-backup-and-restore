@@ -108,7 +108,7 @@ function abSaveConfig() {
         if (el) config[f] = el.value;
     });
 
-    fetch('/plugins/appdata-backup/helpers/ajax.php', {
+    fetch('/plugins/appdata-backup-and-restore/helpers/ajax.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'save_config', config: config })
@@ -128,7 +128,7 @@ function abSaveConfig() {
 
 /* ── Start Backup ── */
 function abStartBackup() {
-    fetch('/plugins/appdata-backup/helpers/ajax.php', {
+    fetch('/plugins/appdata-backup-and-restore/helpers/ajax.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'start_backup' })
@@ -148,7 +148,7 @@ function abStartBackup() {
 
 /* ── Stop Backup ── */
 function abStopBackup() {
-    fetch('/plugins/appdata-backup/helpers/ajax.php', {
+    fetch('/plugins/appdata-backup-and-restore/helpers/ajax.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'stop_backup' })
@@ -169,7 +169,7 @@ function abStopPolling() {
 }
 
 function abPollStatus() {
-    fetch('/plugins/appdata-backup/helpers/ajax.php', {
+    fetch('/plugins/appdata-backup-and-restore/helpers/ajax.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_status' })
@@ -238,7 +238,7 @@ function abSetRunningState(running) {
 function abRefreshLog() {
     var el = document.getElementById('ab-log-output');
     if (!el) return;
-    fetch('/plugins/appdata-backup/helpers/ajax.php', {
+    fetch('/plugins/appdata-backup-and-restore/helpers/ajax.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_log' })
@@ -253,7 +253,7 @@ function abRefreshLog() {
 
 function abClearLog() {
     if (!confirm('Clear the backup log?')) return;
-    fetch('/plugins/appdata-backup/helpers/ajax.php', {
+    fetch('/plugins/appdata-backup-and-restore/helpers/ajax.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'clear_log' })
@@ -277,7 +277,7 @@ function abRefreshBackupList() {
     if (!el) return;
     el.innerHTML = '<div class="ab-loading"><i class="fa fa-spinner fa-spin"></i> Loading backups…</div>';
 
-    fetch('/plugins/appdata-backup/helpers/ajax.php', {
+    fetch('/plugins/appdata-backup-and-restore/helpers/ajax.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'list_backups' })
@@ -322,7 +322,7 @@ function abCloseDeleteModal() {
 }
 function abDoDelete(name) {
     abCloseDeleteModal();
-    fetch('/plugins/appdata-backup/helpers/ajax.php', {
+    fetch('/plugins/appdata-backup-and-restore/helpers/ajax.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete_backup', name: name })
@@ -341,7 +341,7 @@ function abDoDelete(name) {
 
 /* ── Stats Update ── */
 function abUpdateStats() {
-    fetch('/plugins/appdata-backup/helpers/ajax.php', {
+    fetch('/plugins/appdata-backup-and-restore/helpers/ajax.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_stats' })

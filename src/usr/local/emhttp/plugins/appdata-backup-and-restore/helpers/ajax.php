@@ -6,7 +6,7 @@
 header('Content-Type: application/json');
 set_time_limit(0);
 
-$plugin    = 'appdata-backup';
+$plugin    = 'appdata-backup-and-restore';
 $configDir = "/boot/config/plugins/$plugin";
 $configFile = "$configDir/config.cfg";
 $logDir    = "/tmp/$plugin";
@@ -256,7 +256,7 @@ switch ($action) {
 
 // ── Cron Helper ──────────────────────────────────────────────
 function updateCron($enable, $expr, $script, $plugin) {
-    $tag     = "# appdata-backup-cron";
+    $tag     = "# appdata-backup-and-restore-cron";
     $cronLine = "$expr bash $script >> /tmp/$plugin/backup.log 2>&1 $tag";
     $current  = shell_exec("crontab -l 2>/dev/null") ?: '';
     // Remove existing entry
