@@ -4,7 +4,7 @@
 <PLUGIN 
   name="appdata-backup-and-restore"
   author="jcofer555"
-  version="2026.03.14.01"
+  version="2026.03.14.02"
   launch="Settings/appdata-backup-and-restore"
   pluginURL="https://raw.githubusercontent.com/jcofer555/appdata-backup-and-restore/main/plugin/appdata-backup-and-restore.plg"
   support="https://forums.unraid.net/topic/197716-flash-backup-for-unraid/"
@@ -16,6 +16,10 @@
 <CHANGES>
 <![CDATA[
 
+### 2026.03.14.02
+
+- 1
+
 ### 2026.03.14.01
 
 - 1
@@ -25,9 +29,9 @@ For older releases, see https://github.com/jcofer555/appdata-backup-and-restore/
 ]]>
 </CHANGES>
 
-<FILE Name="/boot/config/plugins/appdata-backup-and-restore/unraid-appdata-backup-and-restore-2026.03.14.01-noarch-1.txz">
-<URL>https://github.com/jcofer555/appdata-backup-and-restore/releases/download/2026.03.14.01/unraid-appdata-backup-and-restore-2026.03.14.01-noarch-1.txz</URL>
-<SHA256>8c51ff83ff9feb9661018de5ad7f720ec93ff3b5697efe1486e4e4c85d713941</SHA256>
+<FILE Name="/boot/config/plugins/appdata-backup-and-restore/unraid-appdata-backup-and-restore-2026.03.14.02-noarch-1.txz">
+<URL>https://github.com/jcofer555/appdata-backup-and-restore/releases/download/2026.03.14.02/unraid-appdata-backup-and-restore-2026.03.14.02-noarch-1.txz</URL>
+<SHA256>327c7051c4297324eb5f8d78ae162fc49ea0a649a065ba485126c1a0286767c6</SHA256>
 </FILE>
 
 <!-- ==========================================================
@@ -40,7 +44,7 @@ For older releases, see https://github.com/jcofer555/appdata-backup-and-restore/
 #  INSTALL / UPGRADE LOGIC
 # ==========================================================
 
-PACKAGE_TXZ="/boot/config/plugins/appdata-backup-and-restore/unraid-appdata-backup-and-restore-2026.03.14.01-noarch-1.txz"
+PACKAGE_TXZ="/boot/config/plugins/appdata-backup-and-restore/unraid-appdata-backup-and-restore-2026.03.14.02-noarch-1.txz"
 USER_CFG="/boot/config/plugins/appdata-backup-and-restore/config.cfg"
 DEFAULT_CFG="/usr/local/emhttp/plugins/appdata-backup-and-restore/helpers/default_settings.cfg"
 TMP_CFG="/tmp/appdata-backup-and-restore_settings.tmp"
@@ -103,7 +107,7 @@ mv "$TMP_CFG" "$USER_CFG"
 # Remove older txz packages (keep only the current one)
 find /boot/config/plugins/appdata-backup-and-restore/ -maxdepth 1 -type f \
     -name "unraid-appdata-backup-and-restore-*.txz" \
-    ! -name "unraid-appdata-backup-and-restore-2026.03.14.01-noarch-1.txz" \
+    ! -name "unraid-appdata-backup-and-restore-2026.03.14.02-noarch-1.txz" \
     -delete
 
 # Ensure scripts are executable
@@ -113,7 +117,7 @@ chmod +x /usr/local/emhttp/plugins/appdata-backup-and-restore/helpers/*.php 2>/d
 echo ""
 echo "----------------------------------------------------"
 echo " appdata-backup-and-restore has been installed."
-echo " Version: 2026.03.14.01"
+echo " Version: 2026.03.14.02"
 echo "----------------------------------------------------"
 echo ""
 
