@@ -1,0 +1,7 @@
+{
+    "files": [
+        "/tmp/flash-backup/flash-backup.log",
+        "/tmp/flash-backup/flash-backup-local-debug.log",
+        "/tmp/flash-backup/flash-backup-remote-debug.log"
+    ]
+}

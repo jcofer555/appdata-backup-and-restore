@@ -1,0 +1,167 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN>
+
+<PLUGIN 
+  name="{{ name }}"
+  author="{{ author }}"
+  version="{{ env['PLUGIN_VERSION'] }}"
+  {% if launch is defined %}launch="{{ launch }}"{% endif %}
+  pluginURL="https://raw.githubusercontent.com/{{ env['GITHUB_REPOSITORY'] }}/main/plugin/{{ name }}.plg"
+  {% if support is defined %}support="{{ support }}"{% endif %}
+  {% if min is defined %}min="{{ min }}"{% endif %}
+  {% if max is defined %}max="{{ max }}"{% endif %}
+  {% if icon is defined %}icon="{{ icon }}"{% endif %}
+>
+
+<CHANGES>
+<![CDATA[
+{{ env['PLUGIN_CHANGELOG'] }}
+
+For older releases, see https://github.com/{{ env['GITHUB_REPOSITORY'] }}/releases
+]]>
+</CHANGES>
+
+<FILE Name="/boot/config/plugins/{{ name }}/{{ package_name }}-{{ env['PLUGIN_VERSION'] }}-noarch-1.txz">
+<URL>https://github.com/{{ env['GITHUB_REPOSITORY'] }}/releases/download/{{ env['PLUGIN_VERSION'] }}/{{ package_name }}-{{ env['PLUGIN_VERSION'] }}-noarch-1.txz</URL>
+<SHA256>{{ env['PLUGIN_CHECKSUM'] }}</SHA256>
+</FILE>
+
+<!-- ==========================================================
+     INSTALL SCRIPT
+========================================================== -->
+<FILE Run="/bin/bash">
+<INLINE>
+<![CDATA[
+# ==========================================================
+#  INSTALL / UPGRADE LOGIC
+# ==========================================================
+
+PACKAGE_TXZ="/boot/config/plugins/{{ name }}/{{ package_name }}-{{ env['PLUGIN_VERSION'] }}-noarch-1.txz"
+USER_CFG="/boot/config/plugins/{{ name }}/settings.cfg"
+REMOTE_USER_CFG="/boot/config/plugins/{{ name }}/settings_remote.cfg"
+DEFAULT_CFG="/usr/local/emhttp/plugins/{{ name }}/helpers/default_settings.cfg"
+REMOTE_DEFAULT_CFG="/usr/local/emhttp/plugins/{{ name }}/helpers/default_settings_remote.cfg"
+TMP_CFG="/tmp/flash-backup_settings.tmp"
+REMOTE_TMP_CFG="/tmp/flash-backup_settings_remote.tmp"
+CRON_FILE="/boot/config/plugins/flash-backup/flash-backup.cron"
+
+# Install the package
+upgradepkg --install-new "$PACKAGE_TXZ"
+
+# Ensure tmp directory exists
+mkdir -p /tmp/flash-backup
+
+# Ordered config keys
+ordered_keys=(
+	"BACKUP_DESTINATION"
+	"BACKUP_OWNER"
+	"BACKUPS_TO_KEEP"
+	"DRY_RUN"
+	"MINIMAL_BACKUP"
+	"NOTIFICATION_SERVICE"
+	"NOTIFICATIONS"
+	"PUSHOVER_USER_KEY"
+	"WEBHOOK_DISCORD"
+	"WEBHOOK_GOTIFY"
+	"WEBHOOK_NTFY"
+	"WEBHOOK_PUSHOVER"
+	"WEBHOOK_SLACK"
+)
+
+# ==========================================================
+#  CONFIG MANAGEMENT
+# ==========================================================
+if [ ! -f "$USER_CFG" ]; then
+    cp "$DEFAULT_CFG" "$USER_CFG"
+else
+    # Add missing keys from default
+    while IFS='=' read -r key val; do
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        if ! grep -q -E "^[[:space:]]*${key}[[:space:]]*=" "$USER_CFG"; then
+            echo "$key=$val" >> "$USER_CFG"
+        fi
+    done < "$DEFAULT_CFG"
+fi
+
+# Rebuild ordered version (only known keys, drop extra lines)
+{
+    for key in "${ordered_keys[@]}"; do
+        grep -E "^[[:space:]]*${key}[[:space:]]*=" "$USER_CFG"
+    done
+} > "$TMP_CFG"
+
+mv "$TMP_CFG" "$USER_CFG"
+
+# Ordered config keys
+remote_ordered_keys=(
+	"B2_BUCKET_NAME"
+	"BACKUPS_TO_KEEP_REMOTE"
+	"DRY_RUN_REMOTE"
+	"MINIMAL_BACKUP_REMOTE"
+	"NOTIFICATION_SERVICE_REMOTE"
+	"NOTIFICATIONS_REMOTE"
+	"PUSHOVER_USER_KEY_REMOTE"
+	"RCLONE_CONFIG_REMOTE"
+	"REMOTE_PATH_IN_CONFIG"
+	"WEBHOOK_DISCORD_REMOTE"
+	"WEBHOOK_GOTIFY_REMOTE"
+	"WEBHOOK_NTFY_REMOTE"
+	"WEBHOOK_PUSHOVER_REMOTE"
+	"WEBHOOK_SLACK_REMOTE"
+)
+
+# ==========================================================
+#  CONFIG MANAGEMENT
+# ==========================================================
+if [ ! -f "$REMOTE_USER_CFG" ]; then
+    cp "$REMOTE_DEFAULT_CFG" "$REMOTE_USER_CFG"
+else
+    # Add missing keys from default
+    while IFS='=' read -r key val; do
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        if ! grep -q -E "^[[:space:]]*${key}[[:space:]]*=" "$REMOTE_USER_CFG"; then
+            echo "$key=$val" >> "$REMOTE_USER_CFG"
+        fi
+    done < "$REMOTE_DEFAULT_CFG"
+fi
+
+# Rebuild ordered version (only known keys, drop extra lines)
+{
+    for key in "${remote_ordered_keys[@]}"; do
+        grep -E "^[[:space:]]*${key}[[:space:]]*=" "$REMOTE_USER_CFG"
+    done
+} > "$REMOTE_TMP_CFG"
+
+mv "$REMOTE_TMP_CFG" "$REMOTE_USER_CFG"
+
+# Remove older txz packages (keep only the current one)
+find /boot/config/plugins/{{ name }}/ -maxdepth 1 -type f -name "{{ package_name }}-*.txz" ! -name "{{ package_name }}-{{ env['PLUGIN_VERSION'] }}-noarch-1.txz" -delete
+
+# Ensure helper scripts are executable
+chmod +x /usr/local/emhttp/plugins/{{ name }}/helpers/*
+
+echo ""
+echo "----------------------------------------------------"
+echo " {{ name }} has been installed."
+echo " Version: {{ env['PLUGIN_VERSION'] }}"
+echo "----------------------------------------------------"
+echo ""
+
+]]>
+</INLINE>
+</FILE>
+
+<!-- ==========================================================
+     REMOVE SCRIPT
+========================================================== -->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+<![CDATA[
+removepkg {{ package_name }}
+rm -rf /usr/local/emhttp/plugins/{{ name }}
+rm -rf /boot/config/plugins/{{ name }}
+]]>
+</INLINE>
+</FILE>
+
+</PLUGIN>
