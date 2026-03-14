@@ -1,0 +1,532 @@
+Menu="Utilities"
+Title="AppData Backup"
+Icon="appdata-backup.png"
+Tag="archive"
+---
+<?php
+/*
+ * AppData Backup Plugin for Unraid
+ * WebUI Page
+ */
+
+$plugin      = 'appdata-backup';
+$configDir   = "/boot/config/plugins/$plugin";
+$configFile  = "$configDir/config.cfg";
+$logDir      = "/tmp/$plugin";
+$lockFile    = "$logDir/backup.lock";
+$logFile     = "$logDir/backup.log";
+
+// Load config with defaults
+$defaults = [
+    'BACKUP_DEST'        => '/mnt/user/backups/appdata',
+    'APPDATA_SRC'        => '/mnt/user/appdata',
+    'STOP_CONTAINERS'    => 'yes',
+    'COMPRESS'           => 'yes',
+    'COMPRESSION_TYPE'   => 'gz',
+    'RETENTION_DAYS'     => '7',
+    'RETENTION_COUNT'    => '5',
+    'SCHEDULED_ENABLE'   => 'no',
+    'CRON_SCHEDULE'      => '0 3 * * *',
+    'NOTIFY_ENABLE'      => 'yes',
+    'NOTIFY_LEVEL'       => 'both',
+    'EXCLUDE_CONTAINERS' => '',
+    'INCLUDE_CONTAINERS' => '',
+    'VERIFY_BACKUP'      => 'yes',
+    'BACKUP_VMDISKS'     => 'no',
+    'EXTRA_FOLDERS'      => '',
+    'PRE_SCRIPT'         => '',
+    'POST_SCRIPT'        => '',
+    'RCLONE_ENABLE'      => 'no',
+    'RCLONE_REMOTE'      => '',
+    'RCLONE_PATH'        => '',
+];
+
+$cfg = $defaults;
+if (file_exists($configFile)) {
+    $lines = file($configFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos($line, '=') !== false && $line[0] !== '#') {
+            [$k, $v] = explode('=', $line, 2);
+            $cfg[trim($k)] = trim($v, " \t\n\r\0\x0B\"'");
+        }
+    }
+}
+
+// Get running docker containers
+$containers = [];
+exec("docker ps --format '{{.Names}}' 2>/dev/null | sort", $containers);
+
+// Get all docker containers
+$allContainers = [];
+exec("docker ps -a --format '{{.Names}}' 2>/dev/null | sort", $allContainers);
+
+// Check if backup is running
+$isRunning = file_exists($lockFile);
+
+// Last backup info
+$lastBackupFile = "$logDir/last_backup.txt";
+$lastBackup     = file_exists($lastBackupFile) ? trim(file_get_contents($lastBackupFile)) : 'Never';
+
+// Backup size info
+$backupSizeFile = "$logDir/backup_size.txt";
+$backupSize     = file_exists($backupSizeFile) ? trim(file_get_contents($backupSizeFile)) : 'Unknown';
+
+// Count existing backups
+$backupCount = 0;
+if (is_dir($cfg['BACKUP_DEST'])) {
+    $backupFolders = glob($cfg['BACKUP_DEST'] . '/appdata_backup_*', GLOB_ONLYDIR);
+    $backupCount   = count($backupFolders);
+}
+?>
+
+<link rel="stylesheet" href="/plugins/appdata-backup/css/appdata-backup.css">
+
+<div id="ab-wrap">
+
+    <!-- Header -->
+    <div class="ab-header">
+        <div class="ab-header-left">
+            <i class="fa fa-archive ab-header-icon"></i>
+            <div>
+                <h1 class="ab-title">AppData Backup</h1>
+                <p class="ab-subtitle">Protect your Docker container data with scheduled, automated backups</p>
+            </div>
+        </div>
+        <div class="ab-header-right">
+            <div id="ab-status-badge" class="ab-badge <?= $isRunning ? 'ab-badge-running' : 'ab-badge-idle' ?>">
+                <span class="ab-badge-dot"></span>
+                <span id="ab-status-text"><?= $isRunning ? 'Backup Running' : 'Idle' ?></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="ab-stats-row">
+        <div class="ab-stat-card">
+            <div class="ab-stat-icon"><i class="fa fa-clock-o"></i></div>
+            <div class="ab-stat-body">
+                <div class="ab-stat-label">Last Backup</div>
+                <div class="ab-stat-value" id="ab-last-backup"><?= htmlspecialchars($lastBackup) ?></div>
+            </div>
+        </div>
+        <div class="ab-stat-card">
+            <div class="ab-stat-icon"><i class="fa fa-hdd-o"></i></div>
+            <div class="ab-stat-body">
+                <div class="ab-stat-label">Backup Size</div>
+                <div class="ab-stat-value" id="ab-backup-size"><?= htmlspecialchars($backupSize) ?></div>
+            </div>
+        </div>
+        <div class="ab-stat-card">
+            <div class="ab-stat-icon"><i class="fa fa-database"></i></div>
+            <div class="ab-stat-body">
+                <div class="ab-stat-label">Stored Backups</div>
+                <div class="ab-stat-value" id="ab-backup-count"><?= $backupCount ?></div>
+            </div>
+        </div>
+        <div class="ab-stat-card">
+            <div class="ab-stat-icon"><i class="fa fa-cube"></i></div>
+            <div class="ab-stat-body">
+                <div class="ab-stat-label">Containers</div>
+                <div class="ab-stat-value"><?= count($allContainers) ?></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Nav -->
+    <div class="ab-tabs">
+        <button class="ab-tab ab-tab-active" onclick="abSwitchTab('settings', this)">
+            <i class="fa fa-cog"></i> Settings
+        </button>
+        <button class="ab-tab" onclick="abSwitchTab('containers', this)">
+            <i class="fa fa-cubes"></i> Containers
+        </button>
+        <button class="ab-tab" onclick="abSwitchTab('schedule', this)">
+            <i class="fa fa-calendar"></i> Schedule
+        </button>
+        <button class="ab-tab" onclick="abSwitchTab('advanced', this)">
+            <i class="fa fa-sliders"></i> Advanced
+        </button>
+        <button class="ab-tab" onclick="abSwitchTab('backups', this)">
+            <i class="fa fa-folder-open"></i> Backups
+        </button>
+        <button class="ab-tab" onclick="abSwitchTab('log', this)">
+            <i class="fa fa-file-text-o"></i> Log
+        </button>
+    </div>
+
+    <!-- ===================== TAB: SETTINGS ===================== -->
+    <div id="ab-tab-settings" class="ab-tab-content ab-tab-content-active">
+        <div class="ab-section">
+            <div class="ab-section-header">
+                <i class="fa fa-folder"></i> Paths
+            </div>
+            <div class="ab-section-body">
+                <div class="ab-field-row">
+                    <label class="ab-label">AppData Source</label>
+                    <div class="ab-field-wrap">
+                        <input type="text" id="APPDATA_SRC" class="ab-input" value="<?= htmlspecialchars($cfg['APPDATA_SRC']) ?>" placeholder="/mnt/user/appdata">
+                        <div class="ab-field-hint">Path to your appdata folder</div>
+                    </div>
+                </div>
+                <div class="ab-field-row">
+                    <label class="ab-label">Backup Destination</label>
+                    <div class="ab-field-wrap">
+                        <input type="text" id="BACKUP_DEST" class="ab-input" value="<?= htmlspecialchars($cfg['BACKUP_DEST']) ?>" placeholder="/mnt/user/backups/appdata">
+                        <div class="ab-field-hint">Where to store backup archives</div>
+                    </div>
+                </div>
+                <div class="ab-field-row">
+                    <label class="ab-label">Extra Folders</label>
+                    <div class="ab-field-wrap">
+                        <input type="text" id="EXTRA_FOLDERS" class="ab-input" value="<?= htmlspecialchars($cfg['EXTRA_FOLDERS']) ?>" placeholder="/mnt/user/media,/mnt/user/downloads">
+                        <div class="ab-field-hint">Additional folders to include (comma-separated)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ab-section">
+            <div class="ab-section-header">
+                <i class="fa fa-compress"></i> Backup Options
+            </div>
+            <div class="ab-section-body">
+                <div class="ab-field-row">
+                    <label class="ab-label">Stop Containers</label>
+                    <div class="ab-field-wrap">
+                        <select id="STOP_CONTAINERS" class="ab-select">
+                            <option value="yes" <?= $cfg['STOP_CONTAINERS'] === 'yes' ? 'selected' : '' ?>>Yes – Stop before backup (recommended)</option>
+                            <option value="no" <?= $cfg['STOP_CONTAINERS'] === 'no' ? 'selected' : '' ?>>No – Backup while running (risk of data corruption)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="ab-field-row">
+                    <label class="ab-label">Compression</label>
+                    <div class="ab-field-wrap">
+                        <select id="COMPRESS" class="ab-select" onchange="abToggleCompression(this.value)">
+                            <option value="yes" <?= $cfg['COMPRESS'] === 'yes' ? 'selected' : '' ?>>Enabled</option>
+                            <option value="no" <?= $cfg['COMPRESS'] === 'no' ? 'selected' : '' ?>>Disabled (faster, larger)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="ab-field-row" id="ab-compression-type-row" <?= $cfg['COMPRESS'] === 'no' ? 'style="display:none"' : '' ?>>
+                    <label class="ab-label">Compression Type</label>
+                    <div class="ab-field-wrap">
+                        <select id="COMPRESSION_TYPE" class="ab-select">
+                            <option value="gz" <?= $cfg['COMPRESSION_TYPE'] === 'gz' ? 'selected' : '' ?>>gzip (.tar.gz) – balanced</option>
+                            <option value="bz2" <?= $cfg['COMPRESSION_TYPE'] === 'bz2' ? 'selected' : '' ?>>bzip2 (.tar.bz2) – smaller, slower</option>
+                            <option value="xz" <?= $cfg['COMPRESSION_TYPE'] === 'xz' ? 'selected' : '' ?>>xz (.tar.xz) – best compression, slowest</option>
+                            <option value="zst" <?= $cfg['COMPRESSION_TYPE'] === 'zst' ? 'selected' : '' ?>>zstd (.tar.zst) – fast and efficient</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="ab-field-row">
+                    <label class="ab-label">Verify Backup</label>
+                    <div class="ab-field-wrap">
+                        <select id="VERIFY_BACKUP" class="ab-select">
+                            <option value="yes" <?= $cfg['VERIFY_BACKUP'] === 'yes' ? 'selected' : '' ?>>Yes – Test archive integrity after backup</option>
+                            <option value="no" <?= $cfg['VERIFY_BACKUP'] === 'no' ? 'selected' : '' ?>>No – Skip verification</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ab-section">
+            <div class="ab-section-header">
+                <i class="fa fa-trash"></i> Retention
+            </div>
+            <div class="ab-section-body">
+                <div class="ab-field-row">
+                    <label class="ab-label">Max Age (days)</label>
+                    <div class="ab-field-wrap">
+                        <input type="number" id="RETENTION_DAYS" class="ab-input ab-input-short" value="<?= htmlspecialchars($cfg['RETENTION_DAYS']) ?>" min="0" max="365">
+                        <div class="ab-field-hint">Backups older than this will be deleted (0 = disabled)</div>
+                    </div>
+                </div>
+                <div class="ab-field-row">
+                    <label class="ab-label">Max Count</label>
+                    <div class="ab-field-wrap">
+                        <input type="number" id="RETENTION_COUNT" class="ab-input ab-input-short" value="<?= htmlspecialchars($cfg['RETENTION_COUNT']) ?>" min="0" max="100">
+                        <div class="ab-field-hint">Keep at most this many backups (0 = unlimited)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ab-section">
+            <div class="ab-section-header">
+                <i class="fa fa-bell"></i> Notifications
+            </div>
+            <div class="ab-section-body">
+                <div class="ab-field-row">
+                    <label class="ab-label">Enable Notifications</label>
+                    <div class="ab-field-wrap">
+                        <select id="NOTIFY_ENABLE" class="ab-select" onchange="abToggleNotify(this.value)">
+                            <option value="yes" <?= $cfg['NOTIFY_ENABLE'] === 'yes' ? 'selected' : '' ?>>Yes</option>
+                            <option value="no" <?= $cfg['NOTIFY_ENABLE'] === 'no' ? 'selected' : '' ?>>No</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="ab-field-row" id="ab-notify-level-row" <?= $cfg['NOTIFY_ENABLE'] === 'no' ? 'style="display:none"' : '' ?>>
+                    <label class="ab-label">Notify On</label>
+                    <div class="ab-field-wrap">
+                        <select id="NOTIFY_LEVEL" class="ab-select">
+                            <option value="both" <?= $cfg['NOTIFY_LEVEL'] === 'both' ? 'selected' : '' ?>>Success &amp; Failure</option>
+                            <option value="failure" <?= $cfg['NOTIFY_LEVEL'] === 'failure' ? 'selected' : '' ?>>Failure Only</option>
+                            <option value="success" <?= $cfg['NOTIFY_LEVEL'] === 'success' ? 'selected' : '' ?>>Success Only</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: CONTAINERS ===================== -->
+    <div id="ab-tab-containers" class="ab-tab-content">
+        <div class="ab-section">
+            <div class="ab-section-header">
+                <i class="fa fa-cubes"></i> Container Selection
+            </div>
+            <div class="ab-section-body">
+                <div class="ab-info-box">
+                    <i class="fa fa-info-circle"></i>
+                    By default <strong>all containers</strong> are backed up. Use the fields below to explicitly include or exclude specific containers.
+                    If <em>Include</em> is set, only those containers will be backed up. If <em>Exclude</em> is set, all containers except those will be backed up.
+                </div>
+
+                <div class="ab-field-row">
+                    <label class="ab-label">Exclude Containers</label>
+                    <div class="ab-field-wrap">
+                        <input type="text" id="EXCLUDE_CONTAINERS" class="ab-input" value="<?= htmlspecialchars($cfg['EXCLUDE_CONTAINERS']) ?>" placeholder="container1,container2">
+                        <div class="ab-field-hint">Comma-separated list of container names to skip</div>
+                    </div>
+                </div>
+                <div class="ab-field-row">
+                    <label class="ab-label">Include Only</label>
+                    <div class="ab-field-wrap">
+                        <input type="text" id="INCLUDE_CONTAINERS" class="ab-input" value="<?= htmlspecialchars($cfg['INCLUDE_CONTAINERS']) ?>" placeholder="container1,container2">
+                        <div class="ab-field-hint">Only back up these containers (overrides exclude)</div>
+                    </div>
+                </div>
+
+                <?php if (!empty($allContainers)): ?>
+                <div class="ab-container-grid-label">Detected Containers:</div>
+                <div class="ab-container-grid">
+                    <?php foreach ($allContainers as $c): ?>
+                    <div class="ab-container-chip" data-name="<?= htmlspecialchars($c) ?>">
+                        <i class="fa fa-circle ab-container-dot"></i>
+                        <?= htmlspecialchars($c) ?>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="ab-section">
+            <div class="ab-section-header">
+                <i class="fa fa-desktop"></i> VM Disks
+            </div>
+            <div class="ab-section-body">
+                <div class="ab-field-row">
+                    <label class="ab-label">Backup VM Disks</label>
+                    <div class="ab-field-wrap">
+                        <select id="BACKUP_VMDISKS" class="ab-select">
+                            <option value="no" <?= $cfg['BACKUP_VMDISKS'] === 'no' ? 'selected' : '' ?>>No</option>
+                            <option value="yes" <?= $cfg['BACKUP_VMDISKS'] === 'yes' ? 'selected' : '' ?>>Yes (⚠️ can be very large)</option>
+                        </select>
+                        <div class="ab-field-hint">Include /mnt/user/domains in the backup</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: SCHEDULE ===================== -->
+    <div id="ab-tab-schedule" class="ab-tab-content">
+        <div class="ab-section">
+            <div class="ab-section-header">
+                <i class="fa fa-calendar-check-o"></i> Scheduled Backups
+            </div>
+            <div class="ab-section-body">
+                <div class="ab-field-row">
+                    <label class="ab-label">Enable Schedule</label>
+                    <div class="ab-field-wrap">
+                        <select id="SCHEDULED_ENABLE" class="ab-select" onchange="abToggleSchedule(this.value)">
+                            <option value="no" <?= $cfg['SCHEDULED_ENABLE'] === 'no' ? 'selected' : '' ?>>Disabled</option>
+                            <option value="yes" <?= $cfg['SCHEDULED_ENABLE'] === 'yes' ? 'selected' : '' ?>>Enabled</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="ab-schedule-fields" <?= $cfg['SCHEDULED_ENABLE'] === 'no' ? 'style="display:none"' : '' ?>>
+                    <div class="ab-field-row">
+                        <label class="ab-label">Cron Expression</label>
+                        <div class="ab-field-wrap">
+                            <input type="text" id="CRON_SCHEDULE" class="ab-input" value="<?= htmlspecialchars($cfg['CRON_SCHEDULE']) ?>" placeholder="0 3 * * *">
+                            <div class="ab-field-hint">Standard cron format: minute hour day month weekday</div>
+                        </div>
+                    </div>
+
+                    <div class="ab-cron-presets">
+                        <div class="ab-cron-preset-label">Quick Presets:</div>
+                        <button type="button" class="ab-preset-btn" onclick="abSetCron('0 3 * * *')">Daily 3am</button>
+                        <button type="button" class="ab-preset-btn" onclick="abSetCron('0 3 * * 0')">Weekly Sun 3am</button>
+                        <button type="button" class="ab-preset-btn" onclick="abSetCron('0 3 1 * *')">Monthly 1st 3am</button>
+                        <button type="button" class="ab-preset-btn" onclick="abSetCron('0 2,14 * * *')">Twice daily</button>
+                    </div>
+
+                    <div id="ab-cron-readable" class="ab-cron-readable"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: ADVANCED ===================== -->
+    <div id="ab-tab-advanced" class="ab-tab-content">
+        <div class="ab-section">
+            <div class="ab-section-header">
+                <i class="fa fa-code"></i> Pre/Post Scripts
+            </div>
+            <div class="ab-section-body">
+                <div class="ab-field-row">
+                    <label class="ab-label">Pre-Backup Script</label>
+                    <div class="ab-field-wrap">
+                        <input type="text" id="PRE_SCRIPT" class="ab-input" value="<?= htmlspecialchars($cfg['PRE_SCRIPT']) ?>" placeholder="/boot/config/plugins/appdata-backup/pre-backup.sh">
+                        <div class="ab-field-hint">Script to run before backup starts</div>
+                    </div>
+                </div>
+                <div class="ab-field-row">
+                    <label class="ab-label">Post-Backup Script</label>
+                    <div class="ab-field-wrap">
+                        <input type="text" id="POST_SCRIPT" class="ab-input" value="<?= htmlspecialchars($cfg['POST_SCRIPT']) ?>" placeholder="/boot/config/plugins/appdata-backup/post-backup.sh">
+                        <div class="ab-field-hint">Script to run after backup completes</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ab-section">
+            <div class="ab-section-header">
+                <i class="fa fa-cloud-upload"></i> Cloud Sync (rclone)
+            </div>
+            <div class="ab-section-body">
+                <div class="ab-field-row">
+                    <label class="ab-label">Enable rclone Sync</label>
+                    <div class="ab-field-wrap">
+                        <select id="RCLONE_ENABLE" class="ab-select" onchange="abToggleRclone(this.value)">
+                            <option value="no" <?= $cfg['RCLONE_ENABLE'] === 'no' ? 'selected' : '' ?>>Disabled</option>
+                            <option value="yes" <?= $cfg['RCLONE_ENABLE'] === 'yes' ? 'selected' : '' ?>>Enabled</option>
+                        </select>
+                        <div class="ab-field-hint">Requires rclone plugin and configured remote</div>
+                    </div>
+                </div>
+                <div id="ab-rclone-fields" <?= $cfg['RCLONE_ENABLE'] === 'no' ? 'style="display:none"' : '' ?>>
+                    <div class="ab-field-row">
+                        <label class="ab-label">rclone Remote</label>
+                        <div class="ab-field-wrap">
+                            <input type="text" id="RCLONE_REMOTE" class="ab-input" value="<?= htmlspecialchars($cfg['RCLONE_REMOTE']) ?>" placeholder="gdrive">
+                            <div class="ab-field-hint">Name of your configured rclone remote</div>
+                        </div>
+                    </div>
+                    <div class="ab-field-row">
+                        <label class="ab-label">Remote Path</label>
+                        <div class="ab-field-wrap">
+                            <input type="text" id="RCLONE_PATH" class="ab-input" value="<?= htmlspecialchars($cfg['RCLONE_PATH']) ?>" placeholder="backups/appdata">
+                            <div class="ab-field-hint">Path on the remote to sync backups to</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: BACKUPS ===================== -->
+    <div id="ab-tab-backups" class="ab-tab-content">
+        <div class="ab-section">
+            <div class="ab-section-header">
+                <i class="fa fa-folder-open-o"></i> Stored Backups
+                <button type="button" class="ab-btn ab-btn-sm ab-btn-secondary" style="margin-left:auto" onclick="abRefreshBackupList()">
+                    <i class="fa fa-refresh"></i> Refresh
+                </button>
+            </div>
+            <div class="ab-section-body">
+                <div id="ab-backup-list">
+                    <div class="ab-loading"><i class="fa fa-spinner fa-spin"></i> Loading backups…</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== TAB: LOG ===================== -->
+    <div id="ab-tab-log" class="ab-tab-content">
+        <div class="ab-section">
+            <div class="ab-section-header">
+                <i class="fa fa-file-text-o"></i> Backup Log
+                <div style="margin-left:auto;display:flex;gap:8px">
+                    <button type="button" class="ab-btn ab-btn-sm ab-btn-secondary" onclick="abRefreshLog()">
+                        <i class="fa fa-refresh"></i> Refresh
+                    </button>
+                    <button type="button" class="ab-btn ab-btn-sm ab-btn-danger" onclick="abClearLog()">
+                        <i class="fa fa-trash"></i> Clear
+                    </button>
+                </div>
+            </div>
+            <div class="ab-section-body">
+                <div id="ab-log-output" class="ab-log-box">Loading log…</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Action Bar -->
+    <div class="ab-action-bar">
+        <button type="button" class="ab-btn ab-btn-secondary" onclick="abSaveConfig()">
+            <i class="fa fa-save"></i> Save Settings
+        </button>
+        <div style="flex:1"></div>
+        <button type="button" id="ab-backup-btn" class="ab-btn ab-btn-primary" onclick="abStartBackup()" <?= $isRunning ? 'disabled' : '' ?>>
+            <i class="fa fa-play"></i> <?= $isRunning ? 'Backup Running…' : 'Start Backup Now' ?>
+        </button>
+        <button type="button" id="ab-stop-btn" class="ab-btn ab-btn-danger" onclick="abStopBackup()" <?= $isRunning ? '' : 'style="display:none"' ?>>
+            <i class="fa fa-stop"></i> Stop Backup
+        </button>
+    </div>
+
+    <!-- Progress Modal -->
+    <div id="ab-progress-modal" class="ab-modal" style="display:none">
+        <div class="ab-modal-box">
+            <div class="ab-modal-title"><i class="fa fa-archive"></i> Backup In Progress</div>
+            <div class="ab-progress-bar-wrap">
+                <div id="ab-progress-bar" class="ab-progress-bar"></div>
+            </div>
+            <div id="ab-progress-msg" class="ab-progress-msg">Initializing…</div>
+            <div id="ab-progress-log" class="ab-log-box ab-log-box-sm"></div>
+        </div>
+    </div>
+
+    <!-- Confirm Delete Modal -->
+    <div id="ab-delete-modal" class="ab-modal" style="display:none">
+        <div class="ab-modal-box ab-modal-box-sm">
+            <div class="ab-modal-title"><i class="fa fa-trash"></i> Delete Backup</div>
+            <p id="ab-delete-msg">Are you sure you want to delete this backup?</p>
+            <div class="ab-modal-actions">
+                <button type="button" class="ab-btn ab-btn-secondary" onclick="abCloseDeleteModal()">Cancel</button>
+                <button type="button" id="ab-delete-confirm-btn" class="ab-btn ab-btn-danger">Delete</button>
+            </div>
+        </div>
+    </div>
+
+</div><!-- #ab-wrap -->
+
+<script src="/plugins/appdata-backup/js/appdata-backup.js"></script>
+<script>
+// Init with PHP values
+var AB_CONFIG = {
+    isRunning: <?= $isRunning ? 'true' : 'false' ?>,
+    scheduledEnable: '<?= $cfg['SCHEDULED_ENABLE'] ?>',
+    cronSchedule: '<?= addslashes($cfg['CRON_SCHEDULE']) ?>'
+};
+document.addEventListener('DOMContentLoaded', function() {
+    abInit();
+});
+</script>
